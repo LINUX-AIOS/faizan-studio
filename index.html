@@ -81,10 +81,16 @@ width:min(780px,86vw);z-index:4;
 .category-tabs {
   display: flex;
   justify-content: center;
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 16px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  /* hide scrollbar but keep scroll */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+.category-tabs::-webkit-scrollbar { display: none; }
 
 .tab {
   background: rgba(24,13,7,.8);
@@ -222,6 +228,14 @@ footer strong{font-family:"Yatra One",serif;color:#d8ad65;font-size:19px;display
     padding: 6px 10px;
     font-size: 12px;
   }
+  .studio-logo {
+    top: 10px;
+    left: 10px;
+  }
+  .studio-logo a {
+    padding: 6px 10px;
+    font-size: 13px;
+  }
 }
 
 .share-btn {
@@ -249,15 +263,40 @@ footer strong{font-family:"Yatra One",serif;color:#d8ad65;font-size:19px;display
   background: rgba(37, 211, 102, 0.25);
 }
 
-@keyframes textGlow {
-  0% { text-shadow: 0 0 5px #d8ad65, 0 0 10px rgba(216, 173, 101, 0.5); }
-  50% { text-shadow: 0 0 10px #f5a524, 0 0 20px #f5a524, 0 0 30px rgba(245, 165, 36, 0.6); }
-  100% { text-shadow: 0 0 5px #d8ad65, 0 0 10px rgba(216, 173, 101, 0.5); }
+.studio-logo {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 10;
+}
+.studio-logo a {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(245, 165, 36, 0.12);
+  border: 1px solid rgba(245, 165, 36, 0.35);
+  color: #f5a524;
+  text-decoration: none;
+  padding: 8px 14px;
+  border-radius: 99px;
+  font-weight: 700;
+  font-size: 15px;
+  font-family: "Yatra One", serif;
+  backdrop-filter: blur(8px);
+  transition: background 0.2s, box-shadow 0.2s;
+  letter-spacing: 0.01em;
+}
+.studio-logo a:hover {
+  background: rgba(245, 165, 36, 0.22);
+  box-shadow: 0 0 14px rgba(245, 165, 36, 0.28);
 }
 
 footer strong a {
-  animation: textGlow 2.5s infinite ease-in-out;
   display: inline-block;
+}
+
+.studio-logo a {
+  border-color: rgba(245, 165, 36, 0.35) !important;
 }
 </style>
 
@@ -278,15 +317,20 @@ footer strong a {
   </a>
 </div>
 
+<div class="studio-logo">
+  <a href="http://khan.linux-aios.com" target="_blank" aria-label="Faizan Studio home">फैज़ान स्टूडियो</a>
+</div>
+
 <picture>
   <img class="hero-bg" src="bg.jpg" alt="Faizan Studio Retro Radio">
 </picture>
 <div class="player-wrap">
 
 <div class="category-tabs">
-  <button class="tab active" data-playlist="PL0CaUqi81mPlQeSCgy5wvNHLRkHV0ZkLe" data-name="Hindi Song">Hindi Song</button>
-  <button class="tab" data-playlist="PLWGr-OulNrLdFjkh3QC4ITA3GSnjqO9vy" data-name="English Song">English Song</button>
-  <button class="tab" data-playlist="PLBC6VaSdMX2C38djUQHHwwcLogKmdJ0P0" data-name="Arabic Song">Arabic Song</button>
+  <button class="tab active" data-playlist="PL0CaUqi81mPlQeSCgy5wvNHLRkHV0ZkLe" data-name="Hindi Classic">Hindi Classic</button>
+  <button class="tab" data-playlist="PLWGr-OulNrLdFjkh3QC4ITA3GSnjqO9vy" data-name="English Classic">English Classic</button>
+  <button class="tab" data-playlist="PLBC6VaSdMX2C38djUQHHwwcLogKmdJ0P0" data-name="Arabic Classic">Arabic Classic</button>
+  <button class="tab" data-playlist="PLFgquLnL59alCl_2TQvOiD5Vgm1hCaGSI" data-name="New Era" data-is-new-era="true">New Era</button>
 </div>
 
 <section class="player" aria-label="Faizan Studio YouTube playlist music player">
@@ -356,6 +400,7 @@ Faizan Studio brings back the atmosphere of the classic studio with over 1500 ti
 let ytPlayer = null;
 let isPlaying = false;
 let progressTimer = null;
+let isSwitchingPlaylist = false;
 const $ = id => document.getElementById(id);
 
 let currentPlaylistId = "PL0CaUqi81mPlQeSCgy5wvNHLRkHV0ZkLe";
@@ -392,6 +437,7 @@ onError:onPlayerError
 
 function onPlayerReady(e){
 try{e.target.setVolume(100)}catch(_){}
+try{ ytPlayer.setShuffle(true); }catch(_){}
 updateTrackData();
 updateProgress();
 }
@@ -406,9 +452,10 @@ startProgressMonitor();
 isPlaying = false;
 setPlayUI(false);
 }else if(e.data === YT.PlayerState.ENDED){
-nextTrack();
+// Don't advance to next track if we're in the middle of switching playlists
+if(!isSwitchingPlaylist) nextTrack();
 }else if(e.data === YT.PlayerState.CUED || e.data === YT.PlayerState.UNSTARTED){
-setTimeout(updateTrackData,300);
+setTimeout(updateTrackData, 300);
 }
 }
 
@@ -527,11 +574,20 @@ document.querySelectorAll(".tab").forEach(tab => {
     $("progressFill").style.width = "0%";
     
     if(ytPlayer && ytPlayer.loadPlaylist) {
+      isSwitchingPlaylist = true;
+      clearInterval(progressTimer);
+      try{ ytPlayer.stopVideo(); }catch(_){}
+      try{ ytPlayer.setShuffle(true); }catch(_){}
       ytPlayer.loadPlaylist({
         list: currentPlaylistId,
         listType: "playlist",
-        index: 0
+        index: Math.floor(Math.random() * 50)
       });
+      // Give YouTube 1.5s to fully load the new playlist, then play
+      setTimeout(() => {
+        isSwitchingPlaylist = false;
+        try{ ytPlayer.playVideo(); }catch(_){}
+      }, 1500);
     }
   });
 });
