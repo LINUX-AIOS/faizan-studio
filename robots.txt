@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: http://faizanstudio.linux-aios.com/sitemap.xml
